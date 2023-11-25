@@ -43,7 +43,7 @@ $global:errors = "Unable to find MiniDumpWriteDump", "[TCP CLIENT] [R14NETCLIENT
 $global:delay_for_exiting = 30 #seconds, this timer sets the time for the second error check.
 $global:delay_for_process_checking = 1 #seconds Delay between each process check
 $global:verbose = $false # If set to true, the Jobs/Tasks Output will be visible
-$flags =  "-serverregion $region -server -headless -noovr -server -fixedtimestep -nosymbollookup  -timestep 120" # Flags/Parameters
+$flags =  "-serverregion $region -server -headless -noovr -fixedtimestep -nosymbollookup  -timestep 120" # Flags/Parameters
 
 echo $flags
 
