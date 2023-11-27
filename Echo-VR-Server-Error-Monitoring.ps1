@@ -14,14 +14,15 @@
 #the $flags variable is now in "THINGS YOU CAN BUT DONT NEED SET UP!!!"
 #added an $region vaiable in THINGS YOU HAVE TO SET UP!!!
 #the $flags variable now has the $region variable in it
-
+#27.11.2023
+#changed some thing on the while loop and tasks to get the script to be a lot less performance hungry
 
 
 
 #######THINGS YOU HAVE TO SET UP!!!#######
 # Get the current number of `echovr.exe` processes running
 $processName = "echovr" #without .exe, this is the name of the echovr.exe (in most cases its just echovr)
-$amountOfInstances = 4 #number of instances you want to run
+$amountOfInstances = 6 #number of instances you want to run
 $global:filepath = "C:\Users\Administrator\Desktop\ready-at-dawn-echo-arena" #the path to your echo-folder (No \ at the end!!!)
 $region = "euw";
 ##############################################################
@@ -41,11 +42,12 @@ $region = "euw";
 #This are all known errors. If you add one, you might need to change the "check_for_errors" function
 $global:errors = "Unable to find MiniDumpWriteDump", "[TCP CLIENT] [R14NETCLIENT] connection to ws:///config closed", "[NETGAME] Service status request failed: 400 Bad Request", "[NETGAME] Service status request failed: 404 Not Found", "[TCP CLIENT] [R14NETCLIENT] connection to ws:///login failed", "[TCP CLIENT] [R14NETCLIENT] connection to ws:///login established"
 $global:delay_for_exiting = 30 #seconds, this timer sets the time for the second error check.
-$global:delay_for_process_checking = 1 #seconds Delay between each process check
+$global:delay_for_process_checking = 2 #seconds Delay between each process check
 $global:verbose = $false # If set to true, the Jobs/Tasks Output will be visible
-$flags =  "-serverregion $region -server -headless -noovr -fixedtimestep -nosymbollookup  -timestep 120" # Flags/Parameters
+$global:showPids = $false# If set to true, the PIDs will be shown
+$flags =  "-serverregion $region -numtaskthreads 2 -server -headless -noovr -server -fixedtimestep -nosymbollookup  -timestep 120" # Flags/Parameters
+ 
 
-echo $flags
 
 #DONT CHANGE
 [System.Collections.ArrayList]$global:PIDS = @()
@@ -60,8 +62,11 @@ function check_for_amount_instances($amount, $path, $processName, $flags){
     # If there are less than $amount echovr.exe processes running, start a new one and log PID
         #if not enough start, else check for errors
     if ($echovrProcesses.Count -lt $amountOfInstances) {
-        $app = Start-Process -FilePath  $path  $flags -PassThru # start process and get ID
-        $global:PIDS += $app.Id # add ID to array
+        while ($echovrProcesses.Count -lt $amountOfInstances) {
+            $app = Start-Process -FilePath  $path  $flags -PassThru # start process and get ID
+            $global:PIDS += $app.Id # add ID to array
+            $echovrProcesses = Get-Process -Name $processName
+        }
     }
     else
     {
@@ -91,10 +96,6 @@ function check_for_errors(){
             Start-Job -ScriptBlock $Function:check_for_error_consistency -ArgumentList $line_clean, $PIDS[$count], $errors, $delay_for_exiting, $logpath 
             #remove the PID with an error from the PID array
             $global:PIDS.Remove($PIDS[$count])
-            echo ("after "+ $PIDS)
-            echo ($line_clean)
-
-
         }
     }
     $global:checkRunningBool = $false
@@ -134,15 +135,14 @@ function check_for_error_consistency($line_clean, $ID, $errors, $delay_for_exiti
 }
 
 
-
 #function to check the output, echo the output and react on the dependent output if needed
 function check_every_output_of_jobs(){
-    $IDofJobs = Get-Job -State Running | Select Id
-    foreach ($job in $IDofJobs){
+    $IDofJobs = Get-Job -State Completed | Where-Object -Property HasMoreData -eq $true | Select Id
+    foreach ($job in $IDofJobs){     
         $result = Receive-Job -Id $job.Id -Wait -AutoRemoveJob
         #If verbose is active output everything from the jobs
         if ($verbose -eq $true){
-            echo $result      
+            echo $result 
         }
 
         #If the result contents an PID, remove the string before it and add the PID back to the PIDS array
@@ -165,15 +165,16 @@ function check_if_PIDs_in_Array_are_running(){
     }
 }
 
-
+echo $flags
 while ($true) {
-    #If the realtime is higher or equal to the last logged starttime, run this function and relog the new time
-    if (((get-date) - (gcim Win32_OperatingSystem).LastBootUpTime | Select TotalSeconds).TotalSeconds -ge $startedTime + $delay_for_process_checking){
         check_for_amount_instances $amountOfInstances $path $processName $flags
         check_if_PIDs_in_Array_are_running
-        $global:startedTime = ((get-date) - (gcim Win32_OperatingSystem).LastBootUpTime | Select TotalSeconds).TotalSeconds        
-    }
-    check_every_output_of_jobs
+        check_every_output_of_jobs
+        if ($showPids -eq $true){        
+            echo $PIDS
+        }
+sleep $delay_for_process_checking
+    
 } 
 
 
