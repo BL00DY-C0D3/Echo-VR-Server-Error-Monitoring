@@ -16,7 +16,10 @@
 #the $flags variable now has the $region variable in it
 #27.11.2023
 #changed some thing on the while loop and tasks to get the script to be a lot less performance hungry
-
+#01.12.2023
+#changed to Powershell 7 to be able to use the -Tail Command on Get-Content. Should better the performance
+#Powershell 7 will now be installed automatically
+#If this script runs in Powershell 5, it will rerun itself in Powershell 7
 
 
 #######THINGS YOU HAVE TO SET UP!!!#######
@@ -42,12 +45,12 @@ $region = "euw";
 #This are all known errors. If you add one, you might need to change the "check_for_errors" function
 $global:errors = "Unable to find MiniDumpWriteDump", "[TCP CLIENT] [R14NETCLIENT] connection to ws:///config closed", "[NETGAME] Service status request failed: 400 Bad Request", "[NETGAME] Service status request failed: 404 Not Found", "[TCP CLIENT] [R14NETCLIENT] connection to ws:///login failed", "[TCP CLIENT] [R14NETCLIENT] connection to ws:///login established"
 $global:delay_for_exiting = 30 #seconds, this timer sets the time for the second error check.
-$global:delay_for_process_checking = 2 #seconds Delay between each process check
+$global:delay_for_process_checking = 3 #seconds Delay between each process check
 $global:verbose = $false # If set to true, the Jobs/Tasks Output will be visible
 $global:showPids = $false# If set to true, the PIDs will be shown
 $flags =  "-serverregion $region -numtaskthreads 2 -server -headless -noovr -server -fixedtimestep -nosymbollookup  -timestep 120" # Flags/Parameters
  
-
+echo $flags
 
 #DONT CHANGE
 [System.Collections.ArrayList]$global:PIDS = @()
@@ -55,6 +58,9 @@ $global:startedTime = ((get-date) - (gcim Win32_OperatingSystem).LastBootUpTime 
 $global:path = "$filepath\bin\win10\$processName.exe" #Path of your echovr.exe
 $global:logpath = "$filepath\_local\r14logs"
 $global:checkRunningBool = $false # is set to true if the check_for_errors function is running
+$global:loop = $true# will stay on false if Powershell 7 isnt standard or not installed at all
+$global:PSversion = $PSVersionTable.PSVersion.Major
+
 
 #This functions checks if enough instances are running. If not it will open enough and add the PIDs to an array $PIDS
 function check_for_amount_instances($amount, $path, $processName, $flags){
@@ -87,9 +93,9 @@ function check_for_errors(){
     #check each PIDs logfiles last line
     for ($count = $PIDS.count -1; $count -ge 0; $count--){
         $pfad_logs = $logpath+"\*_" + $PIDS[$count] + ".log" #the path of the specified logfile
-        [string[]]$arrayFromFile = Get-Content -Path $pfad_logs
+        $lastLineFromFile =  Get-Content -Path $pfad_logs -Tail 1
         # delete the first X charachters (the datetime) and delete IP:Port, will probably need to remove more for new found errors
-        $line_clean = $arrayFromFile[$arrayFromFile.count -1].Substring(25) -replace "[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*:[0-9]*", "" -replace "\?auth=.*&displayname=.* ", " "
+        $line_clean = $lastLineFromFile.Substring(25) -replace "[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*:[0-9]*", "" -replace "\?auth=.*&displayname=.* ", " "
         #if one of the errors in our "error" array contains the content of the last logged line
         if ( $errors -contains $line_clean ){
             #start a new task for the check if the error will stay. That way the loop doesnt need to interrupt like with sleep
@@ -121,9 +127,9 @@ function check_for_error_consistency($line_clean, $ID, $errors, $delay_for_exiti
     
     }
     $pfad_logs = $logpath+"\*_" + $ID + ".log" #the path of the specified logfile
-    [string[]]$arrayFromFile = Get-Content -Path $pfad_logs #get every line of that file
-    # delete the first X charachters (the datetime) and delete IP:Port, will probably need to remove more for different error
-    $line_clean = $arrayFromFile[$arrayFromFile.count -1].Substring(25) -replace "[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*:[0-9]*", "" -replace "\?auth=.*&displayname=.* ", " "
+    $lastLineFromFile =  Get-Content -Path $pfad_logs -Tail 1
+    # delete the first X charachters (the datetime) and delete IP:Port, will probably need to remove more for new found errors
+    $line_clean = $lastLineFromFile.Substring(25) -replace "[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*:[0-9]*", "" -replace "\?auth=.*&displayname=.* ", " "
     #if one of the errors in out error array contains the content of the last logged line kill the process, else add the PID back as an output
     if ( $errors[$errorindex] -contains $line_clean ){
         taskkill /F /PID $ID
@@ -165,8 +171,58 @@ function check_if_PIDs_in_Array_are_running(){
     }
 }
 
+
+function install_winget(){
+    Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Internet Explorer\Main" -Name "DisableFirstRunCustomize" -Value 2
+    $progressPreference = 'silentlyContinue'
+    Write-Information "Downloading WinGet and its dependencies..."
+    Invoke-WebRequest -Uri https://aka.ms/getwinget -OutFile Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle
+    Invoke-WebRequest -Uri https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx -OutFile Microsoft.VCLibs.x64.14.00.Desktop.appx
+    Invoke-WebRequest -Uri https://github.com/microsoft/microsoft-ui-xaml/releases/download/v2.7.3/Microsoft.UI.Xaml.2.7.x64.appx -OutFile Microsoft.UI.Xaml.2.7.x64.appx
+    Invoke-WebRequest -Uri https://github.com/microsoft/winget-cli/releases/download/v1.7.3172-preview/34f5f38e82aa4e7ab15e617c6974e40e_License1.xml -Outfile .\34f5f38e82aa4e7ab15e617c6974e40e_License1.xml
+    Add-AppxPackage Microsoft.VCLibs.x64.14.00.Desktop.appx
+    Add-AppxPackage Microsoft.UI.Xaml.2.7.x64.appx
+    Add-AppxPackage Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle
+    Add-AppxProvisionedPackage -Online -PackagePath .\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle -LicensePath .\34f5f38e82aa4e7ab15e617c6974e40e_License1.xml -Verbose
+
+}
+
+
+
+
+
+function install_powershell7(){
+    echo "Powershell 7 is not installed. We will install it and its dependencys in 5 seconds."
+    sleep 1
+    install_winget
+    winget install --id Microsoft.Powershell --source winget 
+    echo "done"
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") 
+}
+
+pwsh --version
+function check_ps7_install_state(){
+    $Error.Clear()
+    try {$null = pwsh --version}
+    catch {
+        install_powershell7
+    }
+}
+
+
+function check_ps_version(){
+    if ($host.Version.Major -ne 7)
+    {
+        start pwsh $PSCommandPath  
+        exit       
+    }
+}
+
+
+check_ps7_install_state
+check_ps_version
 echo $flags
-while ($true) {
+while ($loop -eq $true) {
         check_for_amount_instances $amountOfInstances $path $processName $flags
         check_if_PIDs_in_Array_are_running
         check_every_output_of_jobs
@@ -176,8 +232,3 @@ while ($true) {
 sleep $delay_for_process_checking
     
 } 
-
-
-
-
-
