@@ -6,20 +6,10 @@
 #Checks for errors and restarts the server. Also checks for the right amount of servers running.
 #Echo <3
 ###################################################################
-#21.11.2023 added:
-#[TCP CLIENT] [R14NETCLIENT] connection to ws:///login?auth failed
-#[TCP CLIENT] [R14NETCLIENT] connection to ws:///login?auth established
-#[NETGAME] Service status request failed: 404 Not Found
-#22.11.2023 
-#the $flags variable is now in "THINGS YOU CAN BUT DONT NEED SET UP!!!"
-#added an $region vaiable in THINGS YOU HAVE TO SET UP!!!
-#the $flags variable now has the $region variable in it
-#27.11.2023
-#changed some thing on the while loop and tasks to get the script to be a lot less performance hungry
-#01.12.2023
-#changed to Powershell 7 to be able to use the -Tail Command on Get-Content. Should better the performance
-#Powershell 7 will now be installed automatically
-#If this script runs in Powershell 5, it will rerun itself in Powershell 7
+#!!!!!!!!!!
+#CHANGELOG IS NOW AT THE END OF THE FILE
+#!!!!!!!!!!
+
 
 
 #######THINGS YOU HAVE TO SET UP!!!#######
@@ -28,7 +18,7 @@ $processName = "echovr" #without .exe, this is the name of the echovr.exe (in mo
 $amountOfInstances = 6 #number of instances you want to run
 $global:filepath = "C:\Users\Administrator\Desktop\ready-at-dawn-echo-arena" #the path to your echo-folder (No \ at the end!!!)
 $region = "euw";
-##############################################################
+#
 #Please use one of the following region codes after in $region
 #  "uscn", // US Central North (Chicago)
 #  "us-central-2", // US Central South (Texas)
@@ -38,22 +28,23 @@ $region = "euw";
 #  "euw", // EU West 
 #  "jp", // Japan (idk)
 #  "sin", // Singapore oce region
-##############################################################
+
+
 
 
 #######THINGS YOU CAN BUT DONT NEED SET UP!!!#######
 #This are all known errors. If you add one, you might need to change the "check_for_errors" function
-$global:errors = "Unable to find MiniDumpWriteDump", "[TCP CLIENT] [R14NETCLIENT] connection to ws:///config closed", "[NETGAME] Service status request failed: 400 Bad Request", "[NETGAME] Service status request failed: 404 Not Found", "[TCP CLIENT] [R14NETCLIENT] connection to ws:///login failed", "[TCP CLIENT] [R14NETCLIENT] connection to ws:///login established"
+$global:errors = "Unable to find MiniDumpWriteDump", "[TCP CLIENT] [R14NETCLIENT] connection to ws:///config closed", "[NETGAME] Service status request failed: 400 Bad Request", "[NETGAME] Service status request failed: 404 Not Found", "[TCP CLIENT] [R14NETCLIENT] connection to ws:///login"
 $global:delay_for_exiting = 30 #seconds, this timer sets the time for the second error check.
 $global:delay_for_process_checking = 3 #seconds Delay between each process check
 $global:verbose = $false # If set to true, the Jobs/Tasks Output will be visible
 $global:showPids = $false# If set to true, the PIDs will be shown
 $flags =  "-serverregion $region -numtaskthreads 2 -server -headless -noovr -server -fixedtimestep -nosymbollookup  -timestep 120" # Flags/Parameters
- 
-echo $flags
+$disableEditMode = $true #if true the edit mode inside the CLI will be deactivated, if $false it will be activated again (As the script will pause if you press on it when the EditMode is activated, you should use $true here)
+
+
 
 #DONT CHANGE
-[System.Collections.ArrayList]$global:PIDS = @()
 $global:startedTime = ((get-date) - (gcim Win32_OperatingSystem).LastBootUpTime | Select TotalSeconds).TotalSeconds
 $global:path = "$filepath\bin\win10\$processName.exe" #Path of your echovr.exe
 $global:logpath = "$filepath\_local\r14logs"
@@ -62,50 +53,67 @@ $global:loop = $true# will stay on false if Powershell 7 isnt standard or not in
 $global:PSversion = $PSVersionTable.PSVersion.Major
 
 
-#This functions checks if enough instances are running. If not it will open enough and add the PIDs to an array $PIDS
+
+
+#############################################################
+#This functions checks if enough instances are running. If not it will open enough and starts the error check for the processes
 function check_for_amount_instances($amount, $path, $processName, $flags){
     $echovrProcesses = Get-Process -Name $processName 
-    # If there are less than $amount echovr.exe processes running, start a new one and log PID
-        #if not enough start, else check for errors
+    # If there are less than $amount echovr.exe processes running, start a new one
+    #if not enough start, else check for errors
     if ($echovrProcesses.Count -lt $amountOfInstances) {
         while ($echovrProcesses.Count -lt $amountOfInstances) {
-            $app = Start-Process -FilePath  $path  $flags -PassThru # start process and get ID
-            $global:PIDS += $app.Id # add ID to array
+            # create the \old folder
+            New-Item -Path $logpath"\old" -ItemType Directory *> $null
+            #move old logfiles
+            Move-Item -Path $logpath"\*.log" -Destination $logpath"\old\" *> $null
+            #start the processes
+            Start-Process -FilePath  $path  $flags -PassThru *> $null
             $echovrProcesses = Get-Process -Name $processName
+            
         }
+        #make sure the logs have been created
+        sleep 3
     }
     else
     {
-        if($PIDS.count -gt 0){
+            #if there isnt an error check right now
             if ($checkRunningBool -eq $false)
             {
                 $global:checkRunningBool = $true
                 check_for_errors
-            }
-        }
+            }      
     }
 }
+
 
 
 #This function checks the logs for errors specified in the $errors array
 function check_for_errors(){
-
-    #check each PIDs logfiles last line
-    for ($count = $PIDS.count -1; $count -ge 0; $count--){
-        $pfad_logs = $logpath+"\*_" + $PIDS[$count] + ".log" #the path of the specified logfile
-        $lastLineFromFile =  Get-Content -Path $pfad_logs -Tail 1
-        # delete the first X charachters (the datetime) and delete IP:Port, will probably need to remove more for new found errors
-        $line_clean = $lastLineFromFile.Substring(25) -replace "[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*:[0-9]*", "" -replace "\?auth=.*&displayname=.* ", " "
-        #if one of the errors in our "error" array contains the content of the last logged line
-        if ( $errors -contains $line_clean ){
-            #start a new task for the check if the error will stay. That way the loop doesnt need to interrupt like with sleep
-            Start-Job -ScriptBlock $Function:check_for_error_consistency -ArgumentList $line_clean, $PIDS[$count], $errors, $delay_for_exiting, $logpath 
-            #remove the PID with an error from the PID array
-            $global:PIDS.Remove($PIDS[$count])
+    #loop through every running echo PID
+    Get-Process -Name $processName | ForEach-Object {
+        #check if the PID already is in check by a running job
+        $job = Get-Job -Name $_.ID -ErrorAction SilentlyContinue 
+        if ( $job -eq $null ) {
+            $pfad_logs = $logpath+"\*_" + $_.ID + ".log" #the path of the specified logfile
+            $lastLineFromFile =  Get-Content -Path $pfad_logs -Tail 1
+                # delete the first X charachters (the datetime) and delete IP:Port, will probably need to remove more for new found errors
+                $line_clean = $lastLineFromFile.Substring(25) -replace "[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*:[0-9]*", "" -replace "\?auth=.*&displayname=.*", ""
+                #if one of the errors in our "error" array contains the content of the last logged line   
+                if ( $errors -contains $line_clean ){
+                    #echo $error" = "$line_clean
+                    #start a new task for the check if the error will stay. That way the loop doesnt need to interrupt like with sleep
+                    Start-Job -ScriptBlock $Function:check_for_error_consistency -Name $_.ID -ArgumentList $line_clean, $_.ID, $errors, $delay_for_exiting, $logpath 
+                }
+                
+  
         }
     }
     $global:checkRunningBool = $false
 }
+
+
+
 
 #function to check if the specified error is still present after $errorDelayCheckTime
 function check_for_error_consistency($line_clean, $ID, $errors, $delay_for_exiting, $logpath){
@@ -128,8 +136,8 @@ function check_for_error_consistency($line_clean, $ID, $errors, $delay_for_exiti
     }
     $pfad_logs = $logpath+"\*_" + $ID + ".log" #the path of the specified logfile
     $lastLineFromFile =  Get-Content -Path $pfad_logs -Tail 1
-    # delete the first X charachters (the datetime) and delete IP:Port, will probably need to remove more for new found errors
-    $line_clean = $lastLineFromFile.Substring(25) -replace "[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*:[0-9]*", "" -replace "\?auth=.*&displayname=.* ", " "
+    #delete the first X charachters (the datetime) and delete IP:Port, will probably need to remove more for new found errors
+    $line_clean = $lastLineFromFile.Substring(25) -replace "[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*:[0-9]*", "" -replace "\?auth=.*&displayname=.*", ""
     #if one of the errors in out error array contains the content of the last logged line kill the process, else add the PID back as an output
     if ( $errors[$errorindex] -contains $line_clean ){
         taskkill /F /PID $ID
@@ -149,24 +157,6 @@ function check_every_output_of_jobs(){
         #If verbose is active output everything from the jobs
         if ($verbose -eq $true){
             echo $result 
-        }
-
-        #If the result contents an PID, remove the string before it and add the PID back to the PIDS array
-        if ($result -like "addPID.*"){
-            $PIDtoAddToArray = $result.Substring(7) # remove the string
-            $global:PIDS += $PIDtoAddToArray # add ID to array
-        }
-    }
-}
-
-
-#Check if all the PIDs in the PIDS Array are still running (one might be crashed)
-function check_if_PIDs_in_Array_are_running(){
-    for ($count = $PIDS.count -1; $count -ge 0; $count--){
-    #foreach ($ID in $PIDS){
-        if ( (Get-Process -Id $PIDS[$count]) -eq $null){
-             #If the process isnt running, remove it from the PIDS array
-            $global:PIDS.Remove($PIDS[$count])
         }
     }
 }
@@ -193,7 +183,8 @@ function install_winget(){
 
 function install_powershell7(){
     echo "Powershell 7 is not installed. We will install it and its dependencys in 5 seconds."
-    sleep 1
+    echo  "Please make sure to run this script with Administartor right, if it closes without installing"
+    sleep 5
     install_winget
     winget install --id Microsoft.Powershell --source winget 
     echo "done"
@@ -218,13 +209,38 @@ function check_ps_version(){
     }
 }
 
+#If activated this function disables the Edit Mode, so the Script will not be interrupted with an left mouseclick (It is stupid, thats it is activated at all.) If you want to pause for some reason, press the pause button
+function deactivateEditMode() {
+    $Value
+   if ($disableEditMode -eq $true){
+        $Value = '0'
+   }
+   else{
+        $Value = '1'
+   }
+   
+        # Set variables to indicate value and key to set
+        $RegistryPath = 'HKCU:\Console\C:_Program Files_PowerShell_7_pwsh.exe'
+        $Name         = 'QuickEdit'
+        # Create the key if it does not exist
+        try {
+            $null = get-itempropertyvalue -path $RegistryPath -name $Name
+ 	        Set-ItemProperty -Path $RegistryPath -Type DWord -Name $Name -Value $Value
+         } 
+        catch{
+            New-ItemProperty -Path $RegistryPath -Type DWord -Name $Name -Value $Value
+        }
+    
+}
 
+
+
+deactivateEditMode
 check_ps7_install_state
 check_ps_version
 echo $flags
 while ($loop -eq $true) {
         check_for_amount_instances $amountOfInstances $path $processName $flags
-        check_if_PIDs_in_Array_are_running
         check_every_output_of_jobs
         if ($showPids -eq $true){        
             echo $PIDS
@@ -232,3 +248,35 @@ while ($loop -eq $true) {
 sleep $delay_for_process_checking
     
 } 
+
+
+#21.11.2023 added:
+#[TCP CLIENT] [R14NETCLIENT] connection to ws:///login?auth failed
+#[TCP CLIENT] [R14NETCLIENT] connection to ws:///login?auth established
+#[NETGAME] Service status request failed: 404 Not Found
+#22.11.2023 
+#the $flags variable is now in "THINGS YOU CAN BUT DONT NEED SET UP!!!"
+#added an $region vaiable in THINGS YOU HAVE TO SET UP!!!
+#the $flags variable now has the $region variable in it
+#27.11.2023
+#changed some thing on the while loop and tasks to get the script to be a lot less performance hungry
+#01.12.2023
+#changed to Powershell 7 to be able to use the -Tail Command on Get-Content. Should better the performance
+#Powershell 7 will now be installed automatically
+#If this script runs in Powershell 5, it will rerun itself in Powershell 7
+#06.12.2023
+#Added a function to disable the Edit Mode for the CLI that can be activated or deactivated by $true or $false
+#14.12.2023
+#Combined:
+#[TCP CLIENT] [R14NETCLIENT] connection to ws:///login established
+#[TCP CLIENT] [R14NETCLIENT] connection to ws:///login failed
+#to:
+#[TCP CLIENT] [R14NETCLIENT] connection to ws:///login
+#15.12.2023
+#Fixed a big bug due to processes couldnt be killed.
+#Cleaned up a lot of the code and removed some "now" unnecessary functions as i improved parts of the code.
+#The Script will now also check errors on echovr processes that were started before the script was
+#Old logfiles will now be moved into $logpath\old
+
+
+
