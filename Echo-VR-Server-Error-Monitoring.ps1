@@ -6,9 +6,7 @@
 #Checks for errors and restarts the server. Also checks for the right amount of servers running.
 #Echo <3
 ###################################################################
-#!!!!!!!!!!
 #CHANGELOG IS NOW AT THE END OF THE FILE
-#!!!!!!!!!!
 
 
 
@@ -40,7 +38,7 @@ $global:delay_for_process_checking = 3 #seconds Delay between each process check
 $global:verbose = $false # If set to true, the Jobs/Tasks Output will be visible
 $global:showPids = $false# If set to true, the PIDs will be shown
 $flags =  "-serverregion $region -numtaskthreads 2 -server -headless -noovr -server -fixedtimestep -nosymbollookup  -timestep 120" # Flags/Parameters
-$disableEditMode = $false #if true the edit mode inside the CLI will be deactivated, if $false it will be activated again (As the script will pause if you press on it when the EditMode is activated, you should use $true here)
+$disableEditMode = $true #if true the edit mode inside the CLI will be deactivated, if $false it will be activated again (As the script will pause if you press on it when the EditMode is activated, you should use $true here)
 
 
 
@@ -223,16 +221,12 @@ function deactivateEditMode() {
         $RegistryPath = 'HKCU:\Console\C:_Program Files_PowerShell_7_pwsh.exe'
         $Name         = 'QuickEdit'
         # Create the key if it does not exist
-        try {
-            $null = get-itempropertyvalue -path $RegistryPath -name $Name
- 	        Set-ItemProperty -Path $RegistryPath -Type DWord -Name $Name -Value $Value
-         } 
-        catch{
-            New-ItemProperty -Path $RegistryPath -Type DWord -Name $Name -Value $Value
+        if ( get-itempropertyvalue -path $RegistryPath -name $Name *> $null ){
+            Set-ItemProperty -Path $RegistryPath -Type DWord -Name $Name -Value $Value
+        }else{
+            New-Item $RegistryPath -Force | New-ItemProperty -Type DWord -Name $Name -Value $Value -Force | Out-Null *> $null
         }
-    
 }
-
 
 
 deactivateEditMode
