@@ -267,9 +267,9 @@ sleep $delay_for_process_checking
 #to:
 #[TCP CLIENT] [R14NETCLIENT] connection to ws:///login
 #15.12.2023
-#Fixed a big bug due to processes couldnt be killed.
+#Fixed a bug where processes couldnt be killed.
 #Cleaned up a lot of the code and removed some "now" unnecessary functions as i improved parts of the code.
-#The Script will now also check errors on echovr processes that were started before the script was
+#The Script will now also check errors on echovr processes that were started before the script was started
 #Old logfiles will now be moved into $logpath\old
 
 
