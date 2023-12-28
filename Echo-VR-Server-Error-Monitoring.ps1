@@ -263,5 +263,7 @@ sleep $delay_for_process_checking
 #Cleaned up a lot of the code and removed some "now" unnecessary functions as i improved parts of the code.
 #The Script will now also check errors on echovr processes that were started before the script was started
 #Old logfiles will now be moved into $logpath\old
+#28.12.2023
+#changed some parts of the RegEx Checks.
 
 
