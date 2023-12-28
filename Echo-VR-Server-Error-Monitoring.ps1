@@ -28,11 +28,9 @@ $region = "euw";
 #  "sin", // Singapore oce region
 
 
-
-
 #######THINGS YOU CAN BUT DONT NEED SET UP!!!#######
 #This are all known errors. If you add one, you might need to change the "check_for_errors" function
-$global:errors = "Unable to find MiniDumpWriteDump", "[TCP CLIENT] [R14NETCLIENT] connection to ws:///config closed", "[NETGAME] Service status request failed: 400 Bad Request", "[NETGAME] Service status request failed: 404 Not Found", "[TCP CLIENT] [R14NETCLIENT] connection to ws:///login"
+$global:errors = "Unable to find MiniDumpWriteDump", "[NETGAME] Service status request failed: 400 Bad Request", "[NETGAME] Service status request failed: 404 Not Found", "[TCP CLIENT] [R14NETCLIENT] connection to failed", "[TCP CLIENT] [R14NETCLIENT] connection to established", "[TCP CLIENT] [R14NETCLIENT] connection to closed"
 $global:delay_for_exiting = 30 #seconds, this timer sets the time for the second error check.
 $global:delay_for_process_checking = 3 #seconds Delay between each process check
 $global:verbose = $false # If set to true, the Jobs/Tasks Output will be visible
@@ -96,7 +94,7 @@ function check_for_errors(){
             $pfad_logs = $logpath+"\*_" + $_.ID + ".log" #the path of the specified logfile
             $lastLineFromFile =  Get-Content -Path $pfad_logs -Tail 1
                 # delete the first X charachters (the datetime) and delete IP:Port, will probably need to remove more for new found errors
-                $line_clean = $lastLineFromFile.Substring(25) -replace "[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*:[0-9]*", "" -replace "\?auth=.*&displayname=.*", ""
+                $line_clean = $lastLineFromFile.Substring(25) -replace "[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*:[0-9]*", "" -replace "ws://.* ", "" -replace "\?auth=.*&displayname=.*", ""
                 #if one of the errors in our "error" array contains the content of the last logged line   
                 if ( $errors -contains $line_clean ){
                     #echo $error" = "$line_clean
@@ -135,7 +133,7 @@ function check_for_error_consistency($line_clean, $ID, $errors, $delay_for_exiti
     $pfad_logs = $logpath+"\*_" + $ID + ".log" #the path of the specified logfile
     $lastLineFromFile =  Get-Content -Path $pfad_logs -Tail 1
     #delete the first X charachters (the datetime) and delete IP:Port, will probably need to remove more for new found errors
-    $line_clean = $lastLineFromFile.Substring(25) -replace "[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*:[0-9]*", "" -replace "\?auth=.*&displayname=.*", ""
+    $line_clean = $lastLineFromFile.Substring(25) -replace "[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*:[0-9]*", "" -replace "ws://.* ", "" -replace "\?auth=.*&displayname=.*", ""
     #if one of the errors in out error array contains the content of the last logged line kill the process, else add the PID back as an output
     if ( $errors[$errorindex] -contains $line_clean ){
         taskkill /F /PID $ID
@@ -260,17 +258,10 @@ sleep $delay_for_process_checking
 #If this script runs in Powershell 5, it will rerun itself in Powershell 7
 #06.12.2023
 #Added a function to disable the Edit Mode for the CLI that can be activated or deactivated by $true or $false
-#14.12.2023
-#Combined:
-#[TCP CLIENT] [R14NETCLIENT] connection to ws:///login established
-#[TCP CLIENT] [R14NETCLIENT] connection to ws:///login failed
-#to:
-#[TCP CLIENT] [R14NETCLIENT] connection to ws:///login
 #15.12.2023
 #Fixed a bug where processes couldnt be killed.
 #Cleaned up a lot of the code and removed some "now" unnecessary functions as i improved parts of the code.
 #The Script will now also check errors on echovr processes that were started before the script was started
 #Old logfiles will now be moved into $logpath\old
-
 
 
