@@ -1,9 +1,9 @@
 ###################################################################
 #Code by marcel_One_
+#Checks for errors and restarts the server. Also checks for the right amount of servers running.
 #Do what you want with it, but I dont take any responsibility
 #Please contact me if you found bugs or want an added feature
-#Sorry for weird german variable names at some points or bad english
-#Checks for errors and restarts the server. Also checks for the right amount of servers running.
+#Sorry for weird german variable names at some points
 #Echo <3
 ###################################################################
 #CHANGELOG IS NOW AT THE END OF THE FILE
@@ -13,7 +13,7 @@
 #######THINGS YOU HAVE TO SET UP!!!#######
 $processName = "echovr" #without .exe, this is the name of the echovr.exe (in most cases its just echovr)
 
-$amountOfInstances = 2 #number of instances you want to run (If you give this script an Input behind it, this will be overwritten! So like "Echo-VR-Server-Error-Monitoring.ps1 5" )
+$amountOfInstances = 2 #number of instances you want to run (If you give this script an Input behind it, this will be overwritten! So like "pwsh Echo-VR-Server-Error-Monitoring.ps1 5" )
 
 $global:filepath = "C:\Users\Administrator\Desktop\ready-at-dawn-echo-arena" #the path to your echo-folder (No \ at the end!!!)
 
