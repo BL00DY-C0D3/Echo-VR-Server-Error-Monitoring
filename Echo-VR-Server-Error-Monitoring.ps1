@@ -2,7 +2,7 @@
 #Code by marcel_One_
 #Checks for errors and restarts the server. Also checks for the right amount of servers running.
 #Do what you want with it, but I dont take any responsibility
-#Please contact me if you found bugs or want an added feature
+#Please contact me if you found bugs or for feature requests
 #Sorry for weird german variable names at some points
 #Echo <3
 ###################################################################
@@ -13,7 +13,7 @@
 #######THINGS YOU HAVE TO SET UP!!!#######
 $processName = "echovr" #without .exe, this is the name of the echovr.exe (in most cases its just echovr)
 
-$amountOfInstances = 2 #number of instances you want to run (If you give this script an Input behind it, this will be overwritten! So like "pwsh Echo-VR-Server-Error-Monitoring.ps1 5" )
+$amountOfInstances = 2 #number of instances you want to run (If you give this script an Input behind it, this will be overwritten! So like "Echo-VR-Server-Error-Monitoring.ps1 5" )
 
 $global:filepath = "C:\Users\Administrator\Desktop\ready-at-dawn-echo-arena" #the path to your echo-folder (No \ at the end!!!)
 
@@ -28,6 +28,9 @@ $region = "euw";
 #  "euw", // EU West 
 #  "jp", // Japan (idk)
 #  "sin", // Singapore oce region
+
+#SET THIS TO 0 TO DISABLE THE AUTO RESTART OF THE SERVER AFTER X MINUTES. ITS NEEDED AS SERVER CAN GET STUCK SOMETIMES
+$global:delayForKillingIfStuck = 20 #minutes after a server that doesnt change its state will be killed as it could be stuck
 
 
 
@@ -52,11 +55,12 @@ $disableEditMode = $true #if true the edit mode inside the CLI will be deactivat
 
 
 
-#DONT CHANGE
+#DONT CHANGE OR I WILL VISIT YOU AT NIGHT!!!!
 $global:startedTime = ((get-date) - (gcim Win32_OperatingSystem).LastBootUpTime | Select TotalSeconds).TotalSeconds
 $global:path = "$filepath\bin\win10\$processName.exe" #Path of your echovr.exe
 $global:logpath = "$filepath\_local\r14logs"
 $global:checkRunningBool = $false # is set to true if the check_for_errors function is running
+$global:checkStuckBool = $false # is set to true if the vibWantsMeToForceARestartEveryXMinutes function is running
 $global:loop = $true# will stay on false if Powershell 7 isnt standard or not installed at all
 $global:PSversion = $PSVersionTable.PSVersion.Major
 
@@ -85,12 +89,20 @@ function check_for_amount_instances($amount, $path, $processName, $flags){
     }
     else
     {
-            #if there isnt an error check right now
+            #if enough instances are running, check for error
             if ($checkRunningBool -eq $false)
             {
                 $global:checkRunningBool = $true
                 check_for_errors
-            }      
+            }
+
+            if ( $delayForKillingIfStuck -ne 0){
+                if ($checkStuckBool -eq $false)
+                {
+                    $global:checkStuckBool = $true
+                    vibWantsMeToForceARestartEveryXMinutes
+                }  
+            }
     }
 }
 
@@ -168,6 +180,55 @@ function check_every_output_of_jobs(){
         }
     }
 }
+
+
+
+#This function starts a job to check if the server is stuck with the same notification for X Minutes
+function vibWantsMeToForceARestartEveryXMinutes(){
+    #loop through every running echo PID
+    #Start the Job for each running process, if no is running already
+    Get-Process -Name $processName | ForEach-Object {
+        #check if the PID already is in check by a running job
+        $job = Get-Job -Name ($_.ID.ToString() + "_stuck") -ErrorAction SilentlyContinue 
+        if ( $job -eq $null ) {
+            $pfad_logs = $logpath+"\*_" + $_.ID + ".log" #the path of the specified logfile
+            
+            $lastLineFromFile = Get-Content -Path $pfad_logs -Tail 1
+            #start a new task for the check for X min if there is no change and the server got stuck. It kills the process, if it is ruck
+            Start-Job -ScriptBlock $Function:checkForStuckServer -Name ($_.ID.ToString() + "_stuck") -ArgumentList $lastLineFromFile, $_.ID, $delayForKillingIfStuck, $logpath 
+        }
+    }
+    $global:checkStuckBool = $false
+}
+
+
+
+#This function checks if the server is stuck with the same notification for X Minutes
+function checkForStuckServer($lineToCheck, $ID, $delayForKillingIfStuck, $logpath){
+    $startTimeOfJob = (Get-Uptime).TotalSeconds
+
+    $pfad_logs = $logpath+"\*_" + $ID + ".log" #the path of the specified logfile
+    $stillChecking = $true
+    
+    while($stillChecking -eq $true){
+        if( $((Get-Uptime).TotalSeconds) -gt $($startTimeOfJob+($delayForKillingIfStuck*60))){
+            taskkill /F /PID $ID
+            $stillChecking = $false
+        }
+      
+        $lastLineFromFile = Get-Content -Path $pfad_logs -Tail 1
+        echo $lineToCheck
+        echo $lastLineFromFile
+        if ( $lineToCheck -ne $lastLineFromFile ){
+            $stillChecking = $false
+        }
+        Start-Sleep -Seconds 2
+    }
+
+
+}
+
+
 
 
 function install_winget(){
@@ -297,4 +358,6 @@ sleep $delay_for_process_checking
 #07.04.2024
 #Recreated the install_winget as Microsoft broke it!
 #Implemented new errors
-#added the possibility to add the amount of needed server instances behind the script like "pswh Echo-VR-Server-Error-Monitoring.ps1 5"
+#added the possibility to add the amount of needed server instances behind the script like "pswhEcho-VR-Server-Error-Monitoring.ps1 5"
+#08.04.2024
+#added a function to check for stuck servers
