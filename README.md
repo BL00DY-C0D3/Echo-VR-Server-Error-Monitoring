@@ -15,3 +15,9 @@ So like:
 No need to do so
 
 **As this script installes Powershell 7, if it isnt already installed, you might need to start it with admin rights on your first start!**
+
+
+FEATURES:
+- checks for errors
+- cheks for chrahed servers
+- restarts stuck servers
