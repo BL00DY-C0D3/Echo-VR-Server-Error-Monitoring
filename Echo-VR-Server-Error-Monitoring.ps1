@@ -1,9 +1,9 @@
 ###################################################################
 #Code by marcel_One_
+#Checks for errors and restarts the server. Also checks for the right amount of servers running.
 #Do what you want with it, but I dont take any responsibility
 #Please contact me if you found bugs or want an added feature
-#Sorry for weird german variable names at some points or bad english
-#Checks for errors and restarts the server. Also checks for the right amount of servers running.
+#Sorry for weird german variable names at some points
 #Echo <3
 ###################################################################
 #CHANGELOG IS NOW AT THE END OF THE FILE
@@ -11,12 +11,14 @@
 
 
 #######THINGS YOU HAVE TO SET UP!!!#######
-# Get the current number of `echovr.exe` processes running
 $processName = "echovr" #without .exe, this is the name of the echovr.exe (in most cases its just echovr)
-$amountOfInstances = 6 #number of instances you want to run
+
+$amountOfInstances = 2 #number of instances you want to run (If you give this script an Input behind it, this will be overwritten! So like "pwsh Echo-VR-Server-Error-Monitoring.ps1 5" )
+
 $global:filepath = "C:\Users\Administrator\Desktop\ready-at-dawn-echo-arena" #the path to your echo-folder (No \ at the end!!!)
+
 $region = "euw";
-#
+
 #Please use one of the following region codes after in $region
 #  "uscn", // US Central North (Chicago)
 #  "us-central-2", // US Central South (Texas)
@@ -28,9 +30,19 @@ $region = "euw";
 #  "sin", // Singapore oce region
 
 
+
+if ( $args[0] )
+{
+    $amountOfInstances = $args[0]
+}
+
+
+
 #######THINGS YOU CAN BUT DONT NEED SET UP!!!#######
 #This are all known errors. If you add one, you might need to change the "check_for_errors" function
-$global:errors = "Unable to find MiniDumpWriteDump", "[NETGAME] Service status request failed: 400 Bad Request", "[NETGAME] Service status request failed: 404 Not Found", "[TCP CLIENT] [R14NETCLIENT] connection to failed", "[TCP CLIENT] [R14NETCLIENT] connection to established", "[TCP CLIENT] [R14NETCLIENT] connection to closed"
+$global:errors = "Unable to find MiniDumpWriteDump", "[NETGAME] Service status request failed: 400 Bad Request", "[NETGAME] Service status request failed: 404 Not Found", "[TCP CLIENT] [R14NETCLIENT] connection to ws:///login", "[TCP CLIENT] [R14NETCLIENT] connection to failed", `
+ "[TCP CLIENT] [R14NETCLIENT] connection to established", "[TCP CLIENT] [R14NETCLIENT] connection to restored", "[TCP CLIENT] [R14NETCLIENT] connection to closed", "[TCP CLIENT] [R14NETCLIENT] Lost connection (okay) to peer", "[NETGAME] Service status request failed: 502 Bad Gateway", `
+ "[NETGAME] Service status request failed: 0 Unknown"
 $global:delay_for_exiting = 30 #seconds, this timer sets the time for the second error check.
 $global:delay_for_process_checking = 3 #seconds Delay between each process check
 $global:verbose = $false # If set to true, the Jobs/Tasks Output will be visible
@@ -94,7 +106,7 @@ function check_for_errors(){
             $pfad_logs = $logpath+"\*_" + $_.ID + ".log" #the path of the specified logfile
             $lastLineFromFile =  Get-Content -Path $pfad_logs -Tail 1
                 # delete the first X charachters (the datetime) and delete IP:Port, will probably need to remove more for new found errors
-                $line_clean = $lastLineFromFile.Substring(25) -replace "[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*:[0-9]*", "" -replace "ws://.* ", "" -replace "\?auth=.*&displayname=.*", ""
+                $line_clean = $lastLineFromFile.Substring(25) -replace "[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*:[0-9]*", "" -replace "ws://.* ", "" -replace " ws://.*api_key=.*",""  -replace "\?auth=.*", ""
                 #if one of the errors in our "error" array contains the content of the last logged line   
                 if ( $errors -contains $line_clean ){
                     #echo $error" = "$line_clean
@@ -133,7 +145,7 @@ function check_for_error_consistency($line_clean, $ID, $errors, $delay_for_exiti
     $pfad_logs = $logpath+"\*_" + $ID + ".log" #the path of the specified logfile
     $lastLineFromFile =  Get-Content -Path $pfad_logs -Tail 1
     #delete the first X charachters (the datetime) and delete IP:Port, will probably need to remove more for new found errors
-    $line_clean = $lastLineFromFile.Substring(25) -replace "[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*:[0-9]*", "" -replace "ws://.* ", "" -replace "\?auth=.*&displayname=.*", ""
+    $line_clean = $lastLineFromFile.Substring(25) -replace "[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*:[0-9]*", "" -replace "ws://.* ", "" -replace " ws://.*api_key=.*",""  -replace "\?auth=.*", ""
     #if one of the errors in out error array contains the content of the last logged line kill the process, else add the PID back as an output
     if ( $errors[$errorindex] -contains $line_clean ){
         taskkill /F /PID $ID
@@ -160,18 +172,35 @@ function check_every_output_of_jobs(){
 
 function install_winget(){
     Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Internet Explorer\Main" -Name "DisableFirstRunCustomize" -Value 2
-    $progressPreference = 'silentlyContinue'
-    Write-Information "Downloading WinGet and its dependencies..."
-    Invoke-WebRequest -Uri https://aka.ms/getwinget -OutFile Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle
-    Invoke-WebRequest -Uri https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx -OutFile Microsoft.VCLibs.x64.14.00.Desktop.appx
-    Invoke-WebRequest -Uri https://github.com/microsoft/microsoft-ui-xaml/releases/download/v2.7.3/Microsoft.UI.Xaml.2.7.x64.appx -OutFile Microsoft.UI.Xaml.2.7.x64.appx
-    Invoke-WebRequest -Uri https://github.com/microsoft/winget-cli/releases/download/v1.7.3172-preview/34f5f38e82aa4e7ab15e617c6974e40e_License1.xml -Outfile .\34f5f38e82aa4e7ab15e617c6974e40e_License1.xml
-    Add-AppxPackage Microsoft.VCLibs.x64.14.00.Desktop.appx
-    Add-AppxPackage Microsoft.UI.Xaml.2.7.x64.appx
-    Add-AppxPackage Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle
-    Add-AppxProvisionedPackage -Online -PackagePath .\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle -LicensePath .\34f5f38e82aa4e7ab15e617c6974e40e_License1.xml -Verbose
+    $Uri = 'https://www.nuget.org/api/v2/package/Microsoft.UI.Xaml/'
+    $Results = Invoke-WebRequest -Method Get -Uri $Uri -MaximumRedirection 0 -ErrorAction SilentlyContinue -UseBasicParsing
+    Invoke-WebRequest -Uri $Results.Headers.Location -OutFile ~\Microsoft.UI.Xaml.zip -UseBasicParsing
+    Expand-Archive -Path  ~\Microsoft.UI.Xaml.zip -DestinationPath '~\microsoft.ui.xaml' -Force
+    Add-AppxPackage -Path "~\microsoft.ui.xaml\tools\AppX\x64\Release\Microsoft.UI.Xaml*.appx"
+    Invoke-WebRequest -Uri "https://download.microsoft.com/download/4/7/c/47c6134b-d61f-4024-83bd-b9c9ea951c25/Microsoft.VCLibs.x64.14.00.Desktop.appx" -OutFile ~\Microsoft.VCLibs.140.00.appx -UseBasicParsing
+    Add-AppxPackage ~\Microsoft.VCLibs.140.00.appx
+
+
+    # get latest download url
+    $URL = "https://api.github.com/repos/microsoft/winget-cli/releases/latest"
+    $URL = (Invoke-WebRequest -Uri $URL -UseBasicParsing ).Content | ConvertFrom-Json |
+            Select-Object -ExpandProperty "assets" |
+            Where-Object "browser_download_url" -Match '.msixbundle' |
+            Select-Object -ExpandProperty "browser_download_url"
+
+    # download
+    Invoke-WebRequest -Uri $URL -OutFile "Setup.msix" -UseBasicParsing
+    Invoke-WebRequest -Uri https://github.com/microsoft/winget-cli/releases/download/v1.7.3172-preview/34f5f38e82aa4e7ab15e617c6974e40e_License1.xml -Outfile .\34f5f38e82aa4e7ab15e617c6974e40e_License1.xml -UseBasicParsing
+
+    # install
+    Add-AppxPackage -Path "Setup.msix"
+    Add-AppxProvisionedPackage -Online -PackagePath Setup.msix -LicensePath .\34f5f38e82aa4e7ab15e617c6974e40e_License1.xml -Verbose
+
+    # delete file
+    Remove-Item "Setup.msix"
 
 }
+
 
 
 
@@ -265,5 +294,7 @@ sleep $delay_for_process_checking
 #Old logfiles will now be moved into $logpath\old
 #28.12.2023
 #changed some parts of the RegEx Checks.
-
-
+#07.04.2024
+#Recreated the install_winget as Microsoft broke it!
+#Implemented new errors
+#added the possibility to add the amount of needed server instances behind the script like "pswh Echo-VR-Server-Error-Monitoring.ps1 5"
